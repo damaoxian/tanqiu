@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>贪球游戏</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <!-- 游戏区域 -->
+        <div class="game-area">
+            <canvas id="gameCanvas"></canvas>
+            
+            <!-- UI覆盖层 -->
+            <div class="ui-overlay">
+                <div class="top-ui">
+                    <div class="level-text">Level <span id="level">1</span></div>
+                    <div class="score-text">
+                        <span id="score">0</span>
+                        <span class="coin-icon">🪙</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 控制区域 -->
+        <div class="control-area">
+            <button id="controlBtn" class="control-button">
+                <div class="play-icon"></div>
+            </button>
+        </div>
+        
+        <!-- 游戏结束界面 -->
+        <div id="gameOverScreen" class="game-over-screen hidden">
+            <div class="game-over-content">
+                <h2>You scored</h2>
+                <div class="final-score">
+                    <span id="finalScore">0</span>
+                    <span class="coin-icon">🪙</span>
+                </div>
+                <div class="leaderboard">
+                    <div class="leaderboard-item">
+                        <span>1. Li</span>
+                        <span>24</span>
+                    </div>
+                    <div class="leaderboard-item">
+                        <span>2. 6666</span>
+                        <span>19</span>
+                    </div>
+                </div>
+                <button id="restartBtn" class="restart-button">
+                    <div class="restart-icon">↻</div>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="game.js"></script>
+</body>
+</html>
