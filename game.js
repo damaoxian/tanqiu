@@ -45,11 +45,112 @@ let coins = [];
 let bullets = [];
 let lastBulletTime = 0;
 let animationId = null;
+let audioContext = null; // Web Audio API 上下文
+
+// 初始化音频上下文
+function initAudio() {
+    try {
+        // 创建音频上下文（需要用户交互后才能使用）
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) {
+        console.log('音频上下文创建失败:', e);
+    }
+}
+
+// 播放音效
+function playSound(type) {
+    if (!audioContext) {
+        // 如果音频上下文未初始化，尝试初始化
+        initAudio();
+        if (!audioContext) return;
+    }
+    
+    // 如果音频上下文被暂停（需要用户交互），尝试恢复
+    if (audioContext.state === 'suspended') {
+        audioContext.resume();
+    }
+    
+    try {
+        if (type === 'coin') {
+            // 金币收集音效：短促的高频"叮"声
+            playCoinSound();
+        } else if (type === 'explosion') {
+            // 爆炸音效：低沉的"轰"声
+            playExplosionSound();
+        }
+    } catch (e) {
+        console.log('播放音效失败:', e);
+    }
+}
+
+// 播放金币收集音效
+function playCoinSound() {
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    // 设置音调：高频率，短促
+    oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(1000, audioContext.currentTime + 0.1);
+    
+    // 设置音量：快速衰减
+    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+    
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.1);
+}
+
+// 播放爆炸音效
+function playExplosionSound() {
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    // 设置音调：低频，快速下降
+    oscillator.type = 'sawtooth';
+    oscillator.frequency.setValueAtTime(150, audioContext.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(50, audioContext.currentTime + 0.3);
+    
+    // 设置音量：快速衰减
+    gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+    
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.3);
+    
+    // 添加额外的噪声效果
+    const noise = audioContext.createBufferSource();
+    const buffer = audioContext.createBuffer(1, audioContext.sampleRate * 0.2, audioContext.sampleRate);
+    const data = buffer.getChannelData(0);
+    
+    for (let i = 0; i < buffer.length; i++) {
+        data[i] = Math.random() * 2 - 1;
+    }
+    
+    const noiseGain = audioContext.createGain();
+    noise.buffer = buffer;
+    noise.connect(noiseGain);
+    noiseGain.connect(audioContext.destination);
+    
+    noiseGain.gain.setValueAtTime(0.2, audioContext.currentTime);
+    noiseGain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+    
+    noise.start(audioContext.currentTime);
+    noise.stop(audioContext.currentTime + 0.2);
+}
 
 // 初始化
 function init() {
     canvas = document.getElementById('gameCanvas');
     ctx = canvas.getContext('2d');
+    
+    // 初始化音频
+    initAudio();
     
     // 设置canvas尺寸
     resizeCanvas();
@@ -57,11 +158,16 @@ function init() {
     
     // 绑定控制按钮（支持触摸和点击）
     const controlBtn = document.getElementById('controlBtn');
-    controlBtn.addEventListener('click', handleControlClick);
-    controlBtn.addEventListener('touchend', (e) => {
-        e.preventDefault(); // 防止触发点击事件
+    const handleButtonClick = (e) => {
+        if (e) e.preventDefault();
+        // 确保音频上下文已激活（需要用户交互）
+        if (audioContext && audioContext.state === 'suspended') {
+            audioContext.resume();
+        }
         handleControlClick();
-    });
+    };
+    controlBtn.addEventListener('click', handleButtonClick);
+    controlBtn.addEventListener('touchend', handleButtonClick);
     
     // 绑定重启按钮（支持触摸和点击）
     const restartBtn = document.getElementById('restartBtn');
@@ -360,6 +466,8 @@ function checkCoinCollection() {
             if (distance < config.shipRadius + config.coinRadiusSize) {
                 coin.collected = true;
                 score++;
+                // 播放金币收集音效
+                playSound('coin');
             }
         }
     });
@@ -424,6 +532,8 @@ function checkCollisions() {
         const distance = Math.sqrt(dx * dx + dy * dy);
         
         if (distance < config.shipRadius + config.bulletRadius) {
+            // 播放爆炸音效
+            playSound('explosion');
             // 游戏结束
             endGame();
         }
