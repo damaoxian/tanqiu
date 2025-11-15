@@ -40,10 +40,6 @@ function init() {
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
     
-    // 计算中心点
-    config.centerX = canvas.width / 2;
-    config.centerY = canvas.height / 2;
-    
     // 绑定控制按钮（支持触摸和点击）
     const controlBtn = document.getElementById('controlBtn');
     controlBtn.addEventListener('click', handleControlClick);
@@ -62,7 +58,10 @@ function init() {
     
     // 防止页面滚动和缩放
     document.addEventListener('touchmove', (e) => {
-        e.preventDefault();
+        // 只在非按钮区域阻止滚动
+        if (e.target.tagName !== 'BUTTON') {
+            e.preventDefault();
+        }
     }, { passive: false });
     
     document.addEventListener('gesturestart', (e) => {
@@ -77,35 +76,56 @@ function init() {
         e.preventDefault();
     });
     
-    // 初始化游戏
-    resetGame();
-    draw();
+    // 延迟初始化，确保移动端DOM完全加载
+    setTimeout(() => {
+        resizeCanvas();
+        resetGame();
+        draw();
+    }, 100);
+    
+    // 监听屏幕方向变化
+    window.addEventListener('orientationchange', () => {
+        setTimeout(() => {
+            resizeCanvas();
+            if (gameState === GameState.PLAYING || gameState === GameState.WAITING) {
+                draw();
+            }
+        }, 200);
+    });
 }
 
 // 调整canvas尺寸
 function resizeCanvas() {
     const gameArea = document.querySelector('.game-area');
-    const rect = gameArea.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
-    config.centerX = canvas.width / 2;
-    config.centerY = canvas.height / 2;
+    if (!gameArea) return;
     
-    // 如果游戏已开始，重新生成金币以适应新尺寸
-    if (gameState === GameState.PLAYING || gameState === GameState.WAITING) {
-        const wasPlaying = gameState === GameState.PLAYING;
-        generateCoins();
-        if (wasPlaying && ship) {
-            // 重新定位飞船
-            if (coins.length > 0) {
-                const nearestCoin = coins.reduce((prev, curr) => {
-                    const prevDist = Math.abs(prev.angle - ship.angle);
-                    const currDist = Math.abs(curr.angle - ship.angle);
-                    return currDist < prevDist ? curr : prev;
-                });
-                ship.angle = nearestCoin.angle;
-                ship.x = config.centerX + Math.cos(ship.angle) * config.coinRadius;
-                ship.y = config.centerY + Math.sin(ship.angle) * config.coinRadius;
+    const rect = gameArea.getBoundingClientRect();
+    const width = rect.width || gameArea.clientWidth || window.innerWidth;
+    const height = rect.height || gameArea.clientHeight || window.innerHeight;
+    
+    // 确保有有效的尺寸
+    if (width > 0 && height > 0) {
+        canvas.width = width;
+        canvas.height = height;
+        config.centerX = canvas.width / 2;
+        config.centerY = canvas.height / 2;
+        
+        // 如果游戏已开始，重新生成金币以适应新尺寸
+        if (gameState === GameState.PLAYING || gameState === GameState.WAITING) {
+            const wasPlaying = gameState === GameState.PLAYING;
+            generateCoins();
+            if (wasPlaying && ship) {
+                // 重新定位飞船
+                if (coins.length > 0) {
+                    const nearestCoin = coins.reduce((prev, curr) => {
+                        const prevDist = Math.abs(prev.angle - ship.angle);
+                        const currDist = Math.abs(curr.angle - ship.angle);
+                        return currDist < prevDist ? curr : prev;
+                    });
+                    ship.angle = nearestCoin.angle;
+                    ship.x = config.centerX + Math.cos(ship.angle) * config.coinRadius;
+                    ship.y = config.centerY + Math.sin(ship.angle) * config.coinRadius;
+                }
             }
         }
     }
@@ -361,9 +381,20 @@ function restartGame() {
 
 // 绘制游戏
 function draw() {
+    // 检查Canvas是否有效
+    if (!canvas || !ctx || canvas.width === 0 || canvas.height === 0) {
+        return;
+    }
+    
     // 清空画布
     ctx.fillStyle = '#87CEEB';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // 确保中心点已计算
+    if (config.centerX === 0 || config.centerY === 0) {
+        config.centerX = canvas.width / 2;
+        config.centerY = canvas.height / 2;
+    }
     
     // 绘制中心岛屿
     drawIsland();
@@ -551,5 +582,10 @@ function updateUI() {
     document.getElementById('level').textContent = level;
 }
 
-// 启动游戏
-init();
+// 启动游戏 - 确保DOM完全加载后再初始化
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    // DOM已经加载完成
+    init();
+}

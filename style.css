@@ -39,6 +39,8 @@ body {
     position: relative;
     background-color: #87CEEB;
     overflow: hidden;
+    min-height: 0; /* 确保flex子元素可以收缩 */
+    width: 100%;
 }
 
 #gameCanvas {
