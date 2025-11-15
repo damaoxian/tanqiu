@@ -9,7 +9,7 @@ const GameState = {
 const config = {
     centerX: 0,
     centerY: 0,
-    coinRadius: 200, // 圆形路径半径
+    coinRadius: 0, // 圆形路径半径（动态计算）
     coinCount: 30, // 每关金币数量
     coinRadiusSize: 8, // 金币大小
     shipRadius: 12,
@@ -19,6 +19,21 @@ const config = {
     bulletSpawnInterval: 1000, // 毫秒
     islandRadius: 50 // 中心岛屿半径
 };
+
+// 计算合适的金币路径半径
+function calculateCoinRadius() {
+    if (!canvas) return 150;
+    
+    // 获取显示尺寸（考虑设备像素比）
+    const dpr = window.devicePixelRatio || 1;
+    const displayWidth = canvas.width / dpr;
+    const displayHeight = canvas.height / dpr;
+    const minDimension = Math.min(displayWidth, displayHeight);
+    
+    // 根据屏幕尺寸动态计算，留出足够的边距
+    // 移动端使用较小的半径
+    return Math.max(80, Math.min(200, minDimension * 0.35));
+}
 
 // 游戏变量
 let canvas, ctx;
@@ -77,38 +92,86 @@ function init() {
     });
     
     // 延迟初始化，确保移动端DOM完全加载
-    setTimeout(() => {
+    // 使用多次尝试确保Canvas正确初始化
+    let initAttempts = 0;
+    const tryInit = () => {
         resizeCanvas();
-        resetGame();
-        draw();
-    }, 100);
+        if (canvas.width > 0 && canvas.height > 0) {
+            resetGame();
+            draw();
+        } else if (initAttempts < 5) {
+            // 如果Canvas尺寸还是0，重试
+            initAttempts++;
+            setTimeout(tryInit, 100);
+        }
+    };
     
-    // 监听屏幕方向变化
-    window.addEventListener('orientationchange', () => {
-        setTimeout(() => {
+    setTimeout(tryInit, 50);
+    
+    // 监听屏幕方向变化和窗口大小变化
+    let resizeTimer;
+    const handleResize = () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
             resizeCanvas();
             if (gameState === GameState.PLAYING || gameState === GameState.WAITING) {
                 draw();
             }
-        }, 200);
+        }, 100);
+    };
+    
+    window.addEventListener('orientationchange', handleResize);
+    window.addEventListener('resize', handleResize);
+    
+    // 监听页面可见性变化，确保切换回来时重新绘制
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && (gameState === GameState.PLAYING || gameState === GameState.WAITING)) {
+            resizeCanvas();
+            draw();
+        }
     });
 }
 
 // 调整canvas尺寸
 function resizeCanvas() {
     const gameArea = document.querySelector('.game-area');
-    if (!gameArea) return;
+    if (!gameArea || !canvas) return;
     
     const rect = gameArea.getBoundingClientRect();
-    const width = rect.width || gameArea.clientWidth || window.innerWidth;
-    const height = rect.height || gameArea.clientHeight || window.innerHeight;
+    let width = rect.width;
+    let height = rect.height;
+    
+    // 如果尺寸无效，尝试其他方法
+    if (width <= 0 || height <= 0) {
+        width = gameArea.clientWidth;
+        height = gameArea.clientHeight;
+    }
+    
+    // 如果还是无效，使用窗口尺寸（减去控制区域高度）
+    if (width <= 0 || height <= 0) {
+        const controlArea = document.querySelector('.control-area');
+        const controlHeight = controlArea ? controlArea.offsetHeight : 150;
+        width = window.innerWidth;
+        height = window.innerHeight - controlHeight;
+    }
     
     // 确保有有效的尺寸
     if (width > 0 && height > 0) {
-        canvas.width = width;
-        canvas.height = height;
-        config.centerX = canvas.width / 2;
-        config.centerY = canvas.height / 2;
+        // 使用设备像素比优化显示
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        canvas.style.width = width + 'px';
+        canvas.style.height = height + 'px';
+        
+        // 重置变换矩阵，然后缩放上下文以适应设备像素比
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+        
+        // 更新配置（使用显示尺寸，不是Canvas内部尺寸）
+        config.centerX = width / 2;
+        config.centerY = height / 2;
+        config.coinRadius = calculateCoinRadius();
         
         // 如果游戏已开始，重新生成金币以适应新尺寸
         if (gameState === GameState.PLAYING || gameState === GameState.WAITING) {
@@ -177,6 +240,12 @@ function startNextLevel() {
 // 生成金币路径（圆形路径）
 function generateCoins() {
     coins = [];
+    
+    // 确保coinRadius已计算
+    if (config.coinRadius === 0) {
+        config.coinRadius = calculateCoinRadius();
+    }
+    
     const angleStep = (Math.PI * 2) / config.coinCount;
     
     for (let i = 0; i < config.coinCount; i++) {
@@ -382,19 +451,33 @@ function restartGame() {
 // 绘制游戏
 function draw() {
     // 检查Canvas是否有效
-    if (!canvas || !ctx || canvas.width === 0 || canvas.height === 0) {
+    if (!canvas || !ctx) {
         return;
     }
     
-    // 清空画布
-    ctx.fillStyle = '#87CEEB';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // 获取实际的显示尺寸（考虑设备像素比）
+    const dpr = window.devicePixelRatio || 1;
+    const displayWidth = canvas.width / dpr;
+    const displayHeight = canvas.height / dpr;
     
-    // 确保中心点已计算
-    if (config.centerX === 0 || config.centerY === 0) {
-        config.centerX = canvas.width / 2;
-        config.centerY = canvas.height / 2;
+    if (displayWidth === 0 || displayHeight === 0) {
+        // 如果尺寸无效，尝试重新调整
+        resizeCanvas();
+        return;
     }
+    
+    // 确保中心点和半径已计算
+    if (config.centerX === 0 || config.centerY === 0) {
+        config.centerX = displayWidth / 2;
+        config.centerY = displayHeight / 2;
+    }
+    if (config.coinRadius === 0) {
+        config.coinRadius = calculateCoinRadius();
+    }
+    
+    // 清空画布（使用显示尺寸）
+    ctx.fillStyle = '#87CEEB';
+    ctx.fillRect(0, 0, displayWidth, displayHeight);
     
     // 绘制中心岛屿
     drawIsland();
