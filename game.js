@@ -325,6 +325,15 @@ function startNextLevel() {
     bullets = [];
     lastBulletTime = 0;
     
+    // 停止游戏循环
+    if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+    }
+    
+    // 将游戏状态设置为等待状态，需要点击开始按钮才能继续
+    gameState = GameState.WAITING;
+    
     // 重新生成金币
     generateCoins();
     
@@ -340,7 +349,12 @@ function startNextLevel() {
         };
     }
     
+    // 更新按钮样式，移除reverse类，显示为开始按钮
+    document.getElementById('controlBtn').classList.remove('reverse');
+    
+    // 更新UI并绘制当前状态（等待状态）
     updateUI();
+    draw();
 }
 
 // 生成金币路径（圆形路径）
